@@ -10,6 +10,9 @@ import (
 // PartitionWaterMarks represents a map of PartitionWaterMarks grouped by PartitionID
 type PartitionWaterMarks = map[int32]kafka.PartitionWaterMark
 
+// PartitionStatuses represents a map of PartitionStatuses for a topic indexed by PartitionID
+type PartitionStatuses = map[int32]kafka.PartitionStatus
+
 // OffsetStorage stores the latest commited offsets for each group, topic, partition combination and offers an interface
 // to access these information
 type OffsetStorage struct {
@@ -23,16 +26,22 @@ type OffsetStorage struct {
 	consumerOffsetsLock         sync.RWMutex
 	partitionHighWaterMarksLock sync.RWMutex
 	partitionLowWaterMarksLock  sync.RWMutex
+	partitionStatusesLock       sync.RWMutex
 	groupMetadataLock           sync.RWMutex
 	topicConfigLock             sync.RWMutex
+
+	// brokerCount is current count of brokers
+	brokerCount             int32
 
 	// consumerOffsets key is "group:topic:partition" (e.g. "sample-consumer:order:20")
 	// partitionHighWaterMarks key is "topicname:partitionId" (e.g. "order:20")
 	// partitionLowWaterMarks key is "topicname:partitionId" (e.g. "order:20")
+	// partitionStatuses key is "topicname:partitionId" (e.g. "order:20")
 	// groupMetadata key is the group id (e.g. "sample-consumer")
 	consumerOffsets         map[string]ConsumerPartitionOffsetMetric
 	partitionHighWaterMarks map[string]PartitionWaterMarks
 	partitionLowWaterMarks  map[string]PartitionWaterMarks
+	partitionStatuses       map[string]PartitionStatuses
 	groupMetadata           map[string]kafka.ConsumerGroupMetadata
 	topicConfig             map[string]kafka.TopicConfiguration
 
@@ -62,11 +71,15 @@ func NewOffsetStorage(consumerOffsetCh chan *kafka.StorageRequest, clusterCh cha
 		consumerOffsetsLock:         sync.RWMutex{},
 		partitionHighWaterMarksLock: sync.RWMutex{},
 		partitionLowWaterMarksLock:  sync.RWMutex{},
+		partitionStatusesLock:       sync.RWMutex{},
 		topicConfigLock:             sync.RWMutex{},
+
+		brokerCount:             0,
 
 		consumerOffsets:         make(map[string]ConsumerPartitionOffsetMetric),
 		partitionHighWaterMarks: make(map[string]PartitionWaterMarks),
 		partitionLowWaterMarks:  make(map[string]PartitionWaterMarks),
+		partitionStatuses:       make(map[string]PartitionStatuses),
 		topicConfig:             make(map[string]kafka.TopicConfiguration),
 		groupMetadata:           make(map[string]kafka.ConsumerGroupMetadata),
 
@@ -113,10 +126,14 @@ func (module *OffsetStorage) clusterWorker() {
 			module.storePartitionLowWaterMark(request.PartitionWaterMark)
 		case kafka.StorageAddPartitionHighWaterMark:
 			module.storePartitionHighWaterMark(request.PartitionWaterMark)
+		case kafka.StoragePartitionStatus:
+			module.storePartitionStatus(request.PartitionStatus)
 		case kafka.StorageAddTopicConfiguration:
 			module.storeTopicConfig(request.TopicConfig)
 		case kafka.StorageDeleteTopic:
 			module.deleteTopic(request.TopicName)
+		case kafka.StorageClusterInfo:
+			module.storeClusterInfo(request.ClusterInfo)
 
 		default:
 			log.WithFields(log.Fields{
@@ -163,6 +180,18 @@ func (module *OffsetStorage) storePartitionLowWaterMark(offset *kafka.PartitionW
 	}
 
 	module.partitionLowWaterMarks[offset.TopicName][offset.PartitionID] = *offset
+}
+
+func (module *OffsetStorage) storePartitionStatus(status *kafka.PartitionStatus) {
+	module.partitionStatusesLock.Lock()
+	defer module.partitionStatusesLock.Unlock()
+
+	// Initialize entry if needed
+	if _, exists := module.partitionStatuses[status.TopicName]; !exists {
+		module.partitionStatuses[status.TopicName] = make(PartitionStatuses)
+	}
+
+	module.partitionStatuses[status.TopicName][status.PartitionID] = *status
 }
 
 func (module *OffsetStorage) storeGroupMetadata(metadata *kafka.ConsumerGroupMetadata) {
@@ -222,6 +251,10 @@ func (module *OffsetStorage) deleteOffsetEntry(consumerGroupName string, topicNa
 	defer module.consumerOffsetsLock.Unlock()
 
 	delete(module.consumerOffsets, key)
+}
+
+func (module *OffsetStorage) storeClusterInfo(info *kafka.ClusterInfo) {
+	module.brokerCount = info.BrokerCount
 }
 
 // ConsumerOffsets returns a copy of the currently known consumer group offsets, so that they can safely be processed

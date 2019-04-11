@@ -37,6 +37,22 @@ type TopicConfiguration struct {
 	TopicName      string
 	PartitionCount int
 	CleanupPolicy  string
+	UnderReplicatedPartitionCount int
+}
+
+type PartitionStatus struct {
+	TopicName      string
+	PartitionID    int32
+	InSyncReplicas int
+	Leader         int32
+	LeaderIsPreferred bool
+	Replicas       []int32
+	UnderReplicated bool
+}
+
+// ClusterInfo describes high-level info about the kafka cluster
+type ClusterInfo struct {
+	BrokerCount int32
 }
 
 type consumerOffsetTopic struct {
@@ -199,8 +215,37 @@ func (module *Cluster) refreshAndSendTopicConfig() {
 			TopicName:      resource.Name,
 			PartitionCount: partitionCount,
 			CleanupPolicy:  resource.Configs[0].Value,
+			UnderReplicatedPartitionCount: 0,
 		}
+
+		for _, partition := range topicByName[resource.Name].Partitions {
+			if len(partition.Isr) < len(partition.Replicas) {
+				config.UnderReplicatedPartitionCount = config.UnderReplicatedPartitionCount + 1
+			}
+		}
+
 		module.storageCh <- newAddTopicConfig(config)
+
+		for _, partition := range topicByName[resource.Name].Partitions {
+			partStatus := &PartitionStatus{
+				TopicName: resource.Name,
+				PartitionID: partition.ID,
+				InSyncReplicas: len(partition.Isr),
+				Leader: partition.Leader,
+				LeaderIsPreferred: true,
+				Replicas: append([]int32{}, partition.Replicas...),
+				UnderReplicated: false,
+			}
+
+			if len(partition.Isr) < len(partition.Replicas) {
+				partStatus.UnderReplicated = true
+			}
+			if len(partition.Replicas) == 0 || partition.Leader != partition.Replicas[0] {
+				partStatus.LeaderIsPreferred = false
+			}
+
+			module.storageCh <- newPartitionStatusRequest(partStatus)
+		}
 	}
 }
 
@@ -211,6 +256,11 @@ func (module *Cluster) refreshAndSendTopicMetadata() {
 	if err != nil {
 		return
 	}
+
+	allBrokers := module.client.Brokers()
+	module.storageCh <- newClusterInfoRequest(&ClusterInfo{
+		BrokerCount: int32(len(allBrokers)),
+	})
 
 	// Send requests in bulk to each broker for those partitions it is responsible/leader for
 	var wg = sync.WaitGroup{}

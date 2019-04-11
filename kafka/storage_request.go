@@ -37,6 +37,12 @@ const (
 
 	// StorageDeleteTopic is the request type to delete all topic information
 	StorageDeleteTopic StorageRequestType = 9
+
+	// StorageClusterInfo is the request type to update cluster info
+	StorageClusterInfo StorageRequestType = 10
+
+	// StoragePartitionStatus is the request type to record per-partition status
+	StoragePartitionStatus StorageRequestType = 11
 )
 
 // StorageRequest is an entity to send messages / requests to the storage module.
@@ -46,6 +52,8 @@ type StorageRequest struct {
 	PartitionWaterMark *PartitionWaterMark
 	TopicConfig        *TopicConfiguration
 	GroupMetadata      *ConsumerGroupMetadata
+	ClusterInfo        *ClusterInfo
+	PartitionStatus    *PartitionStatus
 	ConsumerGroupName  string
 	TopicName          string
 	PartitionID        int32
@@ -120,5 +128,20 @@ func newDeleteTopicRequest(topic string) *StorageRequest {
 	return &StorageRequest{
 		RequestType: StorageDeleteTopic,
 		TopicName:   topic,
+	}
+}
+
+func newClusterInfoRequest(cInfo *ClusterInfo) *StorageRequest {
+	return &StorageRequest{
+		RequestType: StorageClusterInfo,
+		ClusterInfo: cInfo,
+	}
+}
+
+
+func newPartitionStatusRequest(status *PartitionStatus) *StorageRequest {
+	return &StorageRequest{
+		RequestType: StoragePartitionStatus,
+		PartitionStatus: status,
 	}
 }
