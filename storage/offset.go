@@ -149,12 +149,15 @@ func (module *OffsetStorage) deleteTopic(topicName string) {
 	module.topicConfigLock.Lock()
 	module.partitionLowWaterMarksLock.Lock()
 	module.partitionHighWaterMarksLock.Lock()
+	module.partitionStatusesLock.Lock()
 	defer module.topicConfigLock.Unlock()
 	defer module.partitionHighWaterMarksLock.Unlock()
 	defer module.partitionLowWaterMarksLock.Unlock()
+	defer module.partitionStatusesLock.Unlock()
 
 	delete(module.partitionLowWaterMarks, topicName)
 	delete(module.partitionHighWaterMarks, topicName)
+	delete(module.partitionStatuses, topicName)
 	delete(module.topicConfig, topicName)
 }
 
@@ -320,6 +323,20 @@ func (module *OffsetStorage) PartitionLowWaterMarks() map[string]PartitionWaterM
 
 	mapCopy := make(map[string]PartitionWaterMarks)
 	for key, value := range module.partitionLowWaterMarks {
+		mapCopy[key] = value
+	}
+
+	return mapCopy
+}
+
+// PartitionStatuses returns all partition statuses in a copied map, so that it
+// is safe to process in another go routine
+func (module *OffsetStorage) PartitionStatuses() map[string]PartitionStatuses {
+	module.partitionStatusesLock.RLock()
+	defer module.partitionStatusesLock.RUnlock()
+
+	mapCopy := make(map[string]PartitionStatuses)
+	for key, value := range module.partitionStatuses {
 		mapCopy[key] = value
 	}
 
