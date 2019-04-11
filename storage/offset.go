@@ -29,9 +29,10 @@ type OffsetStorage struct {
 	partitionStatusesLock       sync.RWMutex
 	groupMetadataLock           sync.RWMutex
 	topicConfigLock             sync.RWMutex
+	clusterInfoLock             sync.RWMutex
 
 	// brokerCount is current count of brokers
-	brokerCount             int32
+	clusterInfo *kafka.ClusterInfo
 
 	// consumerOffsets key is "group:topic:partition" (e.g. "sample-consumer:order:20")
 	// partitionHighWaterMarks key is "topicname:partitionId" (e.g. "order:20")
@@ -73,8 +74,7 @@ func NewOffsetStorage(consumerOffsetCh chan *kafka.StorageRequest, clusterCh cha
 		partitionLowWaterMarksLock:  sync.RWMutex{},
 		partitionStatusesLock:       sync.RWMutex{},
 		topicConfigLock:             sync.RWMutex{},
-
-		brokerCount:             0,
+		clusterInfoLock:             sync.RWMutex{},
 
 		consumerOffsets:         make(map[string]ConsumerPartitionOffsetMetric),
 		partitionHighWaterMarks: make(map[string]PartitionWaterMarks),
@@ -257,7 +257,9 @@ func (module *OffsetStorage) deleteOffsetEntry(consumerGroupName string, topicNa
 }
 
 func (module *OffsetStorage) storeClusterInfo(info *kafka.ClusterInfo) {
-	module.brokerCount = info.BrokerCount
+	module.clusterInfoLock.Lock()
+	defer module.clusterInfoLock.Unlock()
+	module.clusterInfo = info
 }
 
 // ConsumerOffsets returns a copy of the currently known consumer group offsets, so that they can safely be processed
@@ -341,6 +343,15 @@ func (module *OffsetStorage) PartitionStatuses() map[string]PartitionStatuses {
 	}
 
 	return mapCopy
+}
+
+// ClusterInfo returns a copy of the stored ClusterInfo
+func (module *OffsetStorage) ClusterInfo() kafka.ClusterInfo {
+	module.clusterInfoLock.RLock()
+	defer module.clusterInfoLock.RUnlock()
+
+	info := *module.clusterInfo
+	return info
 }
 
 // IsConsumed indicates whether the consumer offsets topic lag has been caught up and therefore

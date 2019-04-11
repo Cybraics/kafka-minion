@@ -23,6 +23,14 @@ var (
 	partitionLowWaterMarkDesc  *prometheus.Desc
 	partitionHighWaterMarkDesc *prometheus.Desc
 	partitionMessageCountDesc  *prometheus.Desc
+
+	// misc kafka_exporter metrics
+	brokerCountDesc              *prometheus.Desc
+	partitionInSyncReplicasDesc  *prometheus.Desc
+	partitionLeaderDesc          *prometheus.Desc
+	partitionLeaderPreferredDesc *prometheus.Desc
+	partitionReplicasDesc        *prometheus.Desc
+	partitionUnderReplicatedDesc *prometheus.Desc
 )
 
 // Collector collects and provides all Kafka metrics on each /metrics invocation, see:
@@ -49,8 +57,6 @@ func NewCollector(opts *options.Options, storage *storage.OffsetStorage) *Collec
 	logger := log.WithFields(log.Fields{
 		"module": "collector",
 	})
-
-
 
 	if opts.KafkaExporterCompat {
 		// Consumer group metrics
@@ -107,6 +113,51 @@ func NewCollector(opts *options.Options, storage *storage.OffsetStorage) *Collec
 			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
 			[]string{"topic", "partition"}, prometheus.Labels{},
 		)
+
+		partitionMessageCountDesc = prometheus.NewDesc(
+			"kafka_topic_partition_message_count",
+			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		// new
+
+		brokerCountDesc = prometheus.NewDesc(
+			"kafka_brokers",
+			"Number of kafka brokers in cluster.",
+			[]string{}, prometheus.Labels{},
+		)
+
+		partitionInSyncReplicasDesc = prometheus.NewDesc(
+			"kafka_topic_partition_in_sync_replica",
+			"Number of in-sync replicas for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionLeaderDesc = prometheus.NewDesc(
+			"kafka_topic_partition_leader",
+			"Leader broker ID for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionLeaderPreferredDesc = prometheus.NewDesc(
+			"kafka_topic_partition_leader_is_preferred",
+			"Whether the leader broker for this partition is the preferred broker.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionReplicasDesc = prometheus.NewDesc(
+			"kafka_topic_partition_replicas",
+			"Number of replicas for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionUnderReplicatedDesc = prometheus.NewDesc(
+			"kafka_topic_partition_under_replicated_partition",
+			"Whether this partition is under-replicated.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
 	} else {
 		// Consumer group metrics
 		groupPartitionOffsetDesc = prometheus.NewDesc(
@@ -158,6 +209,48 @@ func NewCollector(opts *options.Options, storage *storage.OffsetStorage) *Collec
 			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
 			[]string{"topic", "partition"}, prometheus.Labels{},
 		)
+
+		partitionMessageCountDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "message_count"),
+			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		brokerCountDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "cluster", "broker_count"),
+			"Number of kafka brokers in cluster.",
+			[]string{}, prometheus.Labels{},
+		)
+
+		partitionInSyncReplicasDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "isr_count"),
+			"Number of in-sync replicas for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionLeaderDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "leader"),
+			"Leader broker ID for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionLeaderPreferredDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "leader_preferred"),
+			"Whether the leader broker for this partition is the preferred broker.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionReplicasDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "replica_count"),
+			"Number of replicas for this partition.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+
+		partitionUnderReplicatedDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "under_replicated"),
+			"Whether this partition is under-replicated.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
 	}
 
 	return &Collector{
@@ -184,9 +277,17 @@ func (e *Collector) Collect(ch chan<- prometheus.Metric) {
 	consumerOffsets := e.storage.ConsumerOffsets()
 	partitionLowWaterMarks := e.storage.PartitionLowWaterMarks()
 	partitionHighWaterMarks := e.storage.PartitionHighWaterMarks()
+	partitionStatuses := e.storage.PartitionStatuses()
 	topicConfigs := e.storage.TopicConfigs()
+	clusterInfo := e.storage.ClusterInfo()
 
 	e.collectConsumerOffsets(ch, consumerOffsets, partitionLowWaterMarks, partitionHighWaterMarks)
+
+	ch <- prometheus.MustNewConstMetric(
+		brokerCountDesc,
+		prometheus.GaugeValue,
+		float64(clusterInfo.BrokerCount),
+	)
 
 	for _, config := range topicConfigs {
 		ch <- prometheus.MustNewConstMetric(
@@ -236,6 +337,59 @@ func (e *Collector) Collect(ch chan<- prometheus.Metric) {
 				)
 			}
 		}
+	}
+
+	// metrics from partition statuses
+	for _, partitions := range partitionStatuses {
+		for _, partition := range partitions {
+			ch <- prometheus.MustNewConstMetric(
+				partitionInSyncReplicasDesc,
+				prometheus.GaugeValue,
+				float64(partition.InSyncReplicas),
+				partition.TopicName,
+				strconv.Itoa(int(partition.PartitionID)),
+			)
+
+			ch <- prometheus.MustNewConstMetric(
+				partitionReplicasDesc,
+				prometheus.GaugeValue,
+				float64(len(partition.Replicas)),
+				partition.TopicName,
+				strconv.Itoa(int(partition.PartitionID)),
+			)
+
+			ch <- prometheus.MustNewConstMetric(
+				partitionLeaderDesc,
+				prometheus.GaugeValue,
+				float64(partition.Leader),
+				partition.TopicName,
+				strconv.Itoa(int(partition.PartitionID)),
+			)
+
+			ch <- prometheus.MustNewConstMetric(
+				partitionLeaderPreferredDesc,
+				prometheus.GaugeValue,
+				bool2float(partition.LeaderIsPreferred),
+				partition.TopicName,
+				strconv.Itoa(int(partition.PartitionID)),
+			)
+
+			ch <- prometheus.MustNewConstMetric(
+				partitionUnderReplicatedDesc,
+				prometheus.GaugeValue,
+				bool2float(partition.UnderReplicated),
+				partition.TopicName,
+				strconv.Itoa(int(partition.PartitionID)),
+			)
+		}
+	}
+}
+
+func bool2float(val bool) float64 {
+	if val {
+		return 1.0
+	} else {
+		return 0.0
 	}
 }
 
