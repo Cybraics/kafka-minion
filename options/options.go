@@ -47,6 +47,10 @@ type Options struct {
 	// Prometheus exporter
 	// MetricsPrefix - A prefix for all exported prometheus metrics
 	MetricsPrefix string `envconfig:"METRICS_PREFIX" default:"kafka_minion"`
+
+	// Compatibility settings
+	// KafkaExporterCompat - use metric names and labels as used in github.com/danielqsj/kafka_exporter
+	KafkaExporterCompat      bool     `envconfig:"KAFKA_EXPORTER_COMPAT" default:"false"`
 }
 
 // NewOptions provides Application Options

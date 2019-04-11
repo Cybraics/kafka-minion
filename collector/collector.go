@@ -50,56 +50,115 @@ func NewCollector(opts *options.Options, storage *storage.OffsetStorage) *Collec
 		"module": "collector",
 	})
 
-	// Consumer group metrics
-	groupPartitionOffsetDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "offset"),
-		"Newest commited offset of a consumer group for a partition",
-		[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
-	)
-	groupPartitionCommitCountDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "commit_count"),
-		"Number of commits of a consumer group for a partition",
-		[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
-	)
-	groupPartitionLastCommitDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "last_commit"),
-		"Timestamp when consumer group last commited an offset for a partition",
-		[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
-	)
-	groupPartitionLagDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "lag"),
-		"Number of messages the consumer group is behind for a partition",
-		[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
-	)
-	groupTopicLagDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "group_topic", "lag"),
-		"Number of messages the consumer group is behind for a topic",
-		[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic"}, prometheus.Labels{},
-	)
 
-	// Topic metrics
-	partitionCountDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "topic", "partition_count"),
-		"Partition count for a given topic along with cleanup policy as label",
-		[]string{"topic", "cleanup_policy"}, prometheus.Labels{},
-	)
 
-	// Partition metrics
-	partitionHighWaterMarkDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "high_water_mark"),
-		"Highest known commited offset for this partition",
-		[]string{"topic", "partition"}, prometheus.Labels{},
-	)
-	partitionLowWaterMarkDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "low_water_mark"),
-		"Oldest known commited offset for this partition",
-		[]string{"topic", "partition"}, prometheus.Labels{},
-	)
-	partitionMessageCountDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "message_count"),
-		"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
-		[]string{"topic", "partition"}, prometheus.Labels{},
-	)
+	if opts.KafkaExporterCompat {
+		// Consumer group metrics
+		groupPartitionOffsetDesc = prometheus.NewDesc(
+			"kafka_consumergroup_current_offset",
+			"Newest commited offset of a consumer group for a partition",
+			[]string{"consumergroup", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+
+		groupPartitionCommitCountDesc = prometheus.NewDesc(
+			"kafka_consumergroup_commit_count",
+			"Number of commits of a consumer group for a partition",
+			[]string{"consumergroup", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+
+		groupPartitionLastCommitDesc = prometheus.NewDesc(
+			"kafka_consumergroup_last_commit",
+			"Timestamp when consumer group last commited an offset for a partition",
+			[]string{"consumergroup", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+
+		groupPartitionLagDesc = prometheus.NewDesc(
+			"kafka_consumergroup_lag",
+			"Number of messages the consumer group is behind for a partition",
+			[]string{"consumergroup", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+
+		groupTopicLagDesc = prometheus.NewDesc(
+			"kafka_consumergroup_lag_sum",
+			"Number of messages the consumer group is behind for a topic",
+			[]string{"consumergroup", "group_base_name", "group_is_latest", "group_version", "topic"}, prometheus.Labels{},
+		)
+
+		// Topic metrics
+		partitionCountDesc = prometheus.NewDesc(
+			"kafka_topic_partitions",
+			"Partition count for a given topic along with cleanup policy as label",
+			[]string{"topic", "cleanup_policy"}, prometheus.Labels{},
+		)
+
+		// Partition metrics
+		partitionHighWaterMarkDesc = prometheus.NewDesc(
+			"kafka_topic_partition_current_offset",
+			"Highest known commited offset for this partition",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+		partitionLowWaterMarkDesc = prometheus.NewDesc(
+			"kafka_topic_partition_oldest_offset",
+			"Oldest known commited offset for this partition",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+		partitionMessageCountDesc = prometheus.NewDesc(
+			"kafka_topic_partition_message_count",
+			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+	} else {
+		// Consumer group metrics
+		groupPartitionOffsetDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "offset"),
+			"Newest commited offset of a consumer group for a partition",
+			[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+		groupPartitionCommitCountDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "commit_count"),
+			"Number of commits of a consumer group for a partition",
+			[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+		groupPartitionLastCommitDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "last_commit"),
+			"Timestamp when consumer group last commited an offset for a partition",
+			[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+		groupPartitionLagDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "group_topic_partition", "lag"),
+			"Number of messages the consumer group is behind for a partition",
+			[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic", "partition"}, prometheus.Labels{},
+		)
+		groupTopicLagDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "group_topic", "lag"),
+			"Number of messages the consumer group is behind for a topic",
+			[]string{"group", "group_base_name", "group_is_latest", "group_version", "topic"}, prometheus.Labels{},
+		)
+
+		// Topic metrics
+		partitionCountDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic", "partition_count"),
+			"Partition count for a given topic along with cleanup policy as label",
+			[]string{"topic", "cleanup_policy"}, prometheus.Labels{},
+		)
+
+		// Partition metrics
+		partitionHighWaterMarkDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "high_water_mark"),
+			"Highest known commited offset for this partition",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+		partitionLowWaterMarkDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "low_water_mark"),
+			"Oldest known commited offset for this partition",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+		partitionMessageCountDesc = prometheus.NewDesc(
+			prometheus.BuildFQName(opts.MetricsPrefix, "topic_partition", "message_count"),
+			"Number of messages for a given topic. Calculated by subtracting high water mark by low water mark.",
+			[]string{"topic", "partition"}, prometheus.Labels{},
+		)
+	}
 
 	return &Collector{
 		opts,
