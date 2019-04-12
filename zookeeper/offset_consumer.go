@@ -132,6 +132,8 @@ func (module *OffsetConsumer) consumer() {
 		for _, group := range groups {
 			wg.Add(1)
 
+			// TODO: do we need a connection pool for kazoo clients?
+			// TODO: should we limit # of parallel fetches?
 			go func(group *kazoo.Consumergroup) {
 				defer wg.Done()
 				offsets, err := group.FetchAllOffsets()
@@ -150,7 +152,7 @@ func (module *OffsetConsumer) consumer() {
 
 		endTime := time.Now().UnixNano()
 
-		module.logger.Debugf("finished processing ZK offset collection for %d groups in %d msecs",
+		module.logger.Infof("finished processing ZK offset collection for %d groups in %d msecs",
 			groupCount,
 			(endTime-startTime)/1000000)
 
