@@ -52,9 +52,12 @@ func main() {
 	consumer := kafka.NewOffsetConsumer(opts, consumerOffsetsCh)
 	consumer.Start()
 
-	// Create zookeeper reader
-	zkReader := zookeeper.NewOffsetConsumer(opts, consumerOffsetsCh)
-	zkReader.Start()
+	// Create zookeeper reader if requested
+	var zkReader *zookeeper.OffsetConsumer
+	if opts.ZookeeperURI != "" {
+		zkReader = zookeeper.NewOffsetConsumer(opts, consumerOffsetsCh)
+		zkReader.Start()
+	}
 
 	// Create prometheus collector
 	collector := collector.NewCollector(opts, cache)
