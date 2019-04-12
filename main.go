@@ -6,6 +6,7 @@ import (
 	"github.com/google-cloud-tools/kafka-minion/kafka"
 	"github.com/google-cloud-tools/kafka-minion/options"
 	"github.com/google-cloud-tools/kafka-minion/storage"
+	"github.com/google-cloud-tools/kafka-minion/zookeeper"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -50,6 +51,10 @@ func main() {
 	// Create kafka consumer
 	consumer := kafka.NewOffsetConsumer(opts, consumerOffsetsCh)
 	consumer.Start()
+
+	// Create zookeeper reader
+	zkReader := zookeeper.NewOffsetConsumer(opts, consumerOffsetsCh)
+	zkReader.Start()
 
 	// Create prometheus collector
 	collector := collector.NewCollector(opts, cache)
