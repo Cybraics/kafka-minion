@@ -14,8 +14,10 @@ require (
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.2.0 // indirect
 	github.com/prometheus/procfs v0.0.0-20190319124303-40f3c57fb198 // indirect
+	github.com/samuel/go-zookeeper v0.0.0-20180130194729-c4fab1ac1bec // indirect
 	github.com/sirupsen/logrus v1.4.0
 	github.com/stretchr/testify v1.3.0 // indirect
+	github.com/wvanbergen/kazoo-go v0.0.0-20180202103751-f72d8611297a
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a // indirect
 	golang.org/x/net v0.0.0-20190318221613-d196dffd7c2b // indirect
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6 // indirect
